@@ -10,6 +10,8 @@
 #include <regex>
 #include <ranges>
 #include <fstream>
+#include <stdexcept>
+#include <sstream>
 
 class JSON;
 using JSONList = std::vector<JSON>; // 因为是指针
@@ -19,7 +21,7 @@ class JSON {
 public:
     using Type = std::variant<std::nullptr_t, bool, std::int32_t, double, std::string, JSONList, JSONDict>;
 public:
-    JSON(Type inner = std::nullptr_t{}) : _inner(inner) {}
+    JSON(Type inner = JSONDict{}) : _inner(inner) {}
 
     template <class T>
     bool is() const {
@@ -44,9 +46,76 @@ public:
         return std::get<T>(_inner);
     }
 
+    bool contains(std::string key) const {
+        if (is<JSONDict>()) {
+            return get<JSONDict>().contains(key);
+        }
+        throw std::runtime_error("this object is not a dictionary");
+    }
+
+    JSON &at(std::string key) {
+        if (is<JSONDict>()) {
+            return get<JSONDict>().at(key);
+        }
+        throw std::runtime_error("this object is not a dictionary");
+    }
+
+    JSON const &at(std::string key) const {
+        if (is<JSONDict>()) {
+            return get<JSONDict>().at(key);
+        }
+        throw std::runtime_error("this object is not a dictionary");
+    }
+
+    void insert(std::string key, JSON value) {
+        if (is<JSONDict>()) {
+            get<JSONDict>().try_emplace(std::move(key), std::move(value));
+            return;
+        }
+        throw std::runtime_error("this object is not a dictionary");
+    }
+
+    void push_back(JSON value) {
+        if (is<JSONList>()) {
+            get<JSONList>().emplace_back(value);
+            return;
+        }
+        throw std::runtime_error("this object is not a list");
+    }
+
+    void set(std::string key, JSON value) {
+        if (is<JSONDict>()) {
+            get<JSONDict>().insert_or_assign(std::move(key), std::move(value));
+            return;
+        }
+        throw std::runtime_error("this object is not a dictionary");
+    }
+
+    void erase(std::string key) {
+        if (is<JSONDict>()) {
+            get<JSONDict>().erase(key);
+            return;
+        }
+        throw std::runtime_error("this object is not a dictionary");
+    }
+
+    std::string to_string() {
+        std::ostringstream oss;
+        pretty_print(oss, 0);
+        return oss.str();
+    }
+
     friend std::ostream &operator <<(std::ostream &ostream, const JSON &self) {
         self.pretty_print(ostream, 0);
         return ostream;
+    }
+
+    JSON &operator[](std::string key) {
+        return at(key);
+    }
+
+    JSON const &operator[](std::string key) const {
+        return at(key);
     }
 
 private:
@@ -261,6 +330,13 @@ std::pair<JSON, std::size_t> parse(std::string_view json) {
 }
 
 int main() {
+    JSON a;
+    a.set("5", JSON{1});
+    a.set("88", JSON{std::vector<JSON>{JSON{1}, JSON{2}, JSON{3}}});
+    a.at("88").push_back(JSON{4});
+    a.at("88").push_back(JSON{"hello"});
+    std::cout << a << "\n";
+
     auto str = read("../test.json");
     freopen("../out.json", "w", stdout);
 
