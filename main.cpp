@@ -14,14 +14,16 @@
 #include <sstream>
 
 class JSON;
-using JSONList = std::vector<JSON>; // 因为是指针
-using JSONDict = std::unordered_map<std::string, JSON>;// 啊，我不会实现键值也是JSON的，先不支持了
+using JSONList = std::vector<JSON>;                     // 因为是指针
+using JSONDict = std::unordered_map<std::string, JSON>; // 啊，我不会实现键值也是JSON的，先不支持了
 
 class JSON {
 public:
     using Type = std::variant<std::nullptr_t, bool, std::int32_t, double, std::string, JSONList, JSONDict>;
+
 public:
-    JSON(Type inner = JSONDict{}) : _inner(inner) {}
+    JSON(Type inner = JSONDict{})
+    : _inner(inner) {}
 
     template <class T>
     bool is() const {
@@ -105,7 +107,7 @@ public:
         return oss.str();
     }
 
-    friend std::ostream &operator <<(std::ostream &ostream, const JSON &self) {
+    friend std::ostream &operator<<(std::ostream &ostream, const JSON &self) {
         self.pretty_print(ostream, 0);
         return ostream;
     }
@@ -122,47 +124,49 @@ private:
     Type _inner;
     // JSON格式化输出函数
     void pretty_print(std::ostream &ostream, std::size_t indent = 0) const {
-        std::visit([&](auto const &value) {
-            if constexpr (std::same_as<JSONList, std::decay_t<decltype(value)>>) {
-                if (value.empty()) {
-                    ostream << "[]";
-                } else {
-                    ostream << "[\n";
-                    for (size_t i = 0; i < value.size(); ++i) {
-                        ostream << std::string(2 * (indent + 2), ' ');
-                        value[i].pretty_print(ostream, indent + 2);
-                        if (i + 1 != value.size()) {
-                            ostream << ",";
+        std::visit(
+            [&](auto const &value) {
+                if constexpr (std::same_as<JSONList, std::decay_t<decltype(value)>>) {
+                    if (value.empty()) {
+                        ostream << "[]";
+                    } else {
+                        ostream << "[\n";
+                        for (size_t i = 0; i < value.size(); ++i) {
+                            ostream << std::string(2 * (indent + 2), ' ');
+                            value[i].pretty_print(ostream, indent + 2);
+                            if (i + 1 != value.size()) {
+                                ostream << ",";
+                            }
+                            ostream << "\n";
                         }
-                        ostream << "\n";
+                        ostream << std::string(2 * indent, ' ') << "]";
                     }
-                    ostream << std::string(2 * indent, ' ') << "]";
-                }
-            } else if constexpr (std::same_as<JSONDict, std::decay_t<decltype(value)>>) {
-                if (value.empty()) {
-                    ostream << "{}";
-                } else {
-                    ostream << "{\n";
-                    size_t i = 0;
-                    for (auto const &[key, val] : value) {
-                        ostream << std::string(2 * (indent + 2), ' ') << "\"" << key << "\": ";
-                        val.pretty_print(ostream, indent + 2);
-                        if (i != value.size() - 1) {
-                            ostream << ",";
+                } else if constexpr (std::same_as<JSONDict, std::decay_t<decltype(value)>>) {
+                    if (value.empty()) {
+                        ostream << "{}";
+                    } else {
+                        ostream << "{\n";
+                        size_t i = 0;
+                        for (auto const &[key, val] : value) {
+                            ostream << std::string(2 * (indent + 2), ' ') << "\"" << key << "\": ";
+                            val.pretty_print(ostream, indent + 2);
+                            if (i != value.size() - 1) {
+                                ostream << ",";
+                            }
+                            ostream << "\n";
+                            ++i;
                         }
-                        ostream << "\n";
-                        ++i;
+                        ostream << std::string(2 * indent, ' ') << "}";
                     }
-                    ostream << std::string(2 * indent, ' ') << "}";
+                } else if constexpr (std::same_as<std::string, std::decay_t<decltype(value)>>) {
+                    ostream << "\"" << value << "\"";
+                } else if constexpr (std::same_as<bool, std::decay_t<decltype(value)>>) {
+                    ostream << (value ? "true" : "false");
+                } else {
+                    ostream << value;
                 }
-            } else if constexpr (std::same_as<std::string, std::decay_t<decltype(value)>>) {
-                ostream << "\"" << value << "\"";
-            } else if constexpr (std::same_as<bool, std::decay_t<decltype(value)>>) {
-                ostream << (value ? "true" : "false");
-            } else {
-                ostream << value;
-            }
-        }, _inner);
+            },
+            _inner);
     }
 };
 
@@ -175,15 +179,24 @@ std::string read(std::string const &path) {
 
 constexpr char escape_char(char c) {
     switch (c) {
-        case 'n': return '\n';
-        case 'r': return '\r';
-        case 't': return '\t';
-        case 'a': return '\a';
-        case 'b': return '\b';
-        case 'f': return '\f';
-        case 'v': return '\v';
-        case '0': return '\0';
-        default: return c;
+        case 'n':
+            return '\n';
+        case 'r':
+            return '\r';
+        case 't':
+            return '\t';
+        case 'a':
+            return '\a';
+        case 'b':
+            return '\b';
+        case 'f':
+            return '\f';
+        case 'v':
+            return '\v';
+        case '0':
+            return '\0';
+        default:
+            return c;
     }
     return c;
 }
@@ -227,11 +240,12 @@ std::pair<std::string, size_t> parse_string(std::string_view json, char quote) {
 std::pair<JSON, std::size_t> parse(std::string_view json) {
     if (json.empty()) {
         return {JSON{std::nullptr_t{}}, 0};
-    } else if (std::size_t offset = json.find_first_not_of(skip_ws); offset != 0 && offset != std::string_view::npos) {// 找到不是这些字符开头的位置   != 0 是为了不死循环
+    } else if (std::size_t offset = json.find_first_not_of(skip_ws);
+               offset != 0 && offset != std::string_view::npos) { // 找到不是这些字符开头的位置   != 0 是为了不死循环
         auto [obj, eaten] = parse(json.substr(offset));
         return {std::move(obj), eaten + offset};
     } else if (auto first = std::tolower(json[0]); first == 't' || first == 'f' || first == 'n') {
-        std::regex re{"(true|false|null)", std::regex_constants::icase};// 忽略大小写
+        std::regex re{"(true|false|null)", std::regex_constants::icase}; // 忽略大小写
         std::cmatch match;
         if (std::regex_search(json.data(), json.data() + json.size(), match, re)) {
             auto str = match.str();
@@ -244,7 +258,7 @@ std::pair<JSON, std::size_t> parse(std::string_view json) {
             }
         }
     } else if (std::isdigit(json[0]) || json[0] == '+' || json[0] == '-') {
-        std::regex re(R"([+-]?[0-9]+(\.[0-9]*)?([eE][+-]?[0-9]+)?)");// 整数 浮点数 科学计数法
+        std::regex re(R"([+-]?[0-9]+(\.[0-9]*)?([eE][+-]?[0-9]+)?)"); // 整数 浮点数 科学计数法
         std::cmatch match;
         if (std::regex_search(json.data(), json.data() + json.size(), match, re)) {
             if (auto str = match.str(); auto number = parse_number<int>(str)) {
@@ -253,7 +267,7 @@ std::pair<JSON, std::size_t> parse(std::string_view json) {
                 return {JSON{*number}, str.size()};
             }
         }
-    } else if (json[0] == '"' || json[0] == '\'') {// 支持单引号的字符串
+    } else if (json[0] == '"' || json[0] == '\'') { // 支持单引号的字符串
         auto [str, eaten] = parse_string(json, json[0]);
         return {JSON{std::move(str)}, eaten};
     } else if (json[0] == '[') {
@@ -294,7 +308,7 @@ std::pair<JSON, std::size_t> parse(std::string_view json) {
             }
             i += key_eaten;
 
-            if (!key.is<std::string>()) {// 我们要求键值是string
+            if (!key.is<std::string>()) { // 我们要求键值是string
                 i = 0;
                 break;
             }
@@ -315,7 +329,8 @@ std::pair<JSON, std::size_t> parse(std::string_view json) {
             }
             i += obj_eaten;
 
-            res.insert_or_assign(std::move(key.get<std::string>()), std::move(obj));// 后来者居上, 自己实现的map需要有insert_or_assign
+            res.insert_or_assign(std::move(key.get<std::string>()),
+                                 std::move(obj)); // 后来者居上, 自己实现的map需要有insert_or_assign
 
             if (std::size_t offset = json.find_first_not_of(skip_ws, i); offset != std::string_view::npos) {
                 i = offset;
